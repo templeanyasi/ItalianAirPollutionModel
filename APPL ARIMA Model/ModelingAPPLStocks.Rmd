@@ -1,0 +1,130 @@
+---
+title: "Modeling APPL Stock"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r }
+
+load("~/Downloads/Stocks.RData")
+dat <- Stocks
+View(dat)
+APPL <- dat[,1] #Extracts APPL as first time series
+View(APPL)
+
+```
+
+The dataset chosen is the Stocks.RData file. Viewing the first time series, we have the daily adjusted closing prices from the beginning of 2017 until 2019.
+
+
+
+```{r}
+plot(APPL)
+```
+
+The time series appears to have a positve trend effect from the year 2017 until about 3/4 through 2018. At this point, the series' values declines abruptlu intil it starts to increase again at the beginning of 2019.
+
+There also appears to be a quarterly effect where the closing prices at starting point and half point of the year are lower than the other points of the year. The variability before the time point 2018.5 appears to be relatively stable.
+
+
+
+```{r}
+
+####Log transformation (for scaling)
+lnAPPL <- log(APPL)
+plot(lnAPPL)
+
+####Quarterly Growth rate of log 
+lnd <- diff(lnAPPL)
+plot(lnd)
+```
+First, using log transformation, we are able to scale the data to a more manageable level. However, the overall behavior (trend features, varaibility, etc.) is preserved. Additionally, using the difference function, we can closely approximated the Quarterly Growth rate with first difference of the logged series.
+
+
+
+```{r}
+acf(lnAPPL)
+acf(lnd)
+```
+Differencing in the previous step seems to help create a series that looks stationary eliminating the obvious trend of the orignal data of Stocks. We can treat this as an ARIMA(p,1,q) model. There is no need to further difference because the ACF of the once differenced data drops to zero quickly suggesting it has the properties of a stationary time series.
+
+
+
+```{r}
+library(astsa)
+acf2(lnd,24)
+```
+The sample ACF and PACF are consistent with the data for APPL closing time stocks being either ARIMA(7,1,0) or ARIMA(0,1,7). I used 7 rather than 17 because this is quarterly data and too many lags are not reasonable.
+
+
+
+```{r}
+library(forecast)
+
+fitMA7 <- Arima(lnd, order=c(0,1,7), method='ML', include.constant = TRUE)
+fitAR7 <- Arima(lnd, order=c(7,1,0), method='ML', include.constant = TRUE)
+```
+
+
+
+```{r}
+#MA model
+ 
+sfitMA7 <- sarima(lnd, p=0, d=1, q=7)
+
+
+# Now the AR model: 
+
+sfitAR7 <- sarima(lnd, p=7, d=1, q=0)
+
+```
+The model seems to fit reasonably well. This is based on the fact that the standardized residuals of both models appear to resemble white noise, the ACF of residuals are within the blue dashed line ounds indicated on the graph and the QQ plot suggests the residuals have a distribution close to the theoretical normal distribution.
+
+
+```{r}
+#####Information Criteria for Arima fit
+fitMA7$aic
+fitAR7$aic
+
+fitMA7$aicc
+fitAR7$aicc
+
+fitMA7$bic
+fitAR7$bic
+
+#####Information Criteria for sarima fit
+sfitMA7$AIC
+sfitAR7$AIC 
+
+sfitMA7$AICc
+sfitAR7$AICc
+
+sfitMA7$BIC
+sfitAR7$BIC 
+```
+The AIC model seems to prefer the MA(7) model out of the Arima fit models and out of the sarima fit models. The AICc model has the same preference and prefers the MA(7) model out of the Arima fit models and out of the sarima fit models. The BIC model has the same preference.
+
+I will choose the MA(7) model because it was chosen by all of the infomation criteria.
+
+
+
+```{r}
+fcMA7 <- forecast(fitMA7, h=4) ###Predicts next 5 values
+fcMA7
+plot(fcMA7)
+###Limits x-axis of plot to years 2019 to 2020
+plot(fcMA7, xlim=c(2019.2, 2019.4))
+```
+Used the Arima fit because this was preferred in class.
+
+```{r}
+fitARIMA017 <- Arima(lnd, order=c(0,1,7), include.drift=TRUE)
+fcARIMA017 <- forecast(fitARIMA017, h=24)
+plot(fcARIMA017)
+plot(fcARIMA017, xlim=c(2019.2, 2019.4))
+```
+
